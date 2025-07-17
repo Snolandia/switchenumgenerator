@@ -1,20 +1,13 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode";
-import { CodeAction, CodeActionKind, commands, Location, MarkdownString, Position, Range, SymbolKind, Uri, workspace } from "vscode";
+import { Location, MarkdownString, Position, Range, workspace } from "vscode";
 import { uniqWith } from "lodash";
 
 interface Hover {
 	range: Range;
 	contents: MarkdownString[];
 }
-
-// interface Location {
-// 	originSelectionRange: Range;
-// 	targetRange: Range;
-// 	targetSelectionRange: Range;
-// 	targetUri: Uri;
-// }
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed

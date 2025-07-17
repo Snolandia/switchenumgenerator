@@ -2,8 +2,12 @@
 	"name": "switchenumgenerator",
 	"displayName": "Cpp(C++) Switch Case Enum Generator",
 	"description": "Generate Switch Case for a variable with type enum",
+  "icon": "enumIcon.png",
   "repository": "https://github.com/Snolandia/",
-	"version": "0.0.1",
+  "version": "1.0.2",
+	"license": "MIT",
+	"author": "Snolandia",
+  "publisher": "Snolandia",
 	"engines": {
 		"vscode": "^1.101.2"
 	},
@@ -34,7 +38,7 @@
 		"@types/lodash.uniqwith": "^4.5.6",
 		"@types/mocha": "^10.0.10",
 		"@types/node": "20.x",
-		"@types/vscode": "^1.102.0",
+		"@types/vscode": "^1.101.2",
 		"@typescript-eslint/eslint-plugin": "^8.17.0",
 		"@typescript-eslint/parser": "^8.17.0",
 		"@vscode/test-cli": "^0.0.10",
