@@ -2,12 +2,12 @@
 	"name": "switchenumgenerator",
 	"displayName": "Cpp(C++) Switch Case Enum Generator",
 	"description": "Generate Switch Case for a variable with type enum",
-  "icon": "enumIcon.png",
-  "repository": "https://github.com/Snolandia/switchenumgenerator",
-  "version": "1.0.2",
+	"icon": "enumIcon.png",
+	"repository": "https://github.com/Snolandia/switchenumgenerator",
+	"version": "1.0.0",
 	"license": "MIT",
 	"author": "Snolandia",
-  "publisher": "Snolandia",
+	"publisher": "Snolandia1",
 	"engines": {
 		"vscode": "^1.101.2"
 	},
