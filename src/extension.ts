@@ -75,6 +75,7 @@ export class SwitchGenerator implements vscode.CodeActionProvider {
 					document.uri,
 					new Position(lineNumber, charNumber)
 				);
+
 				if (foundDefinitions?.length) {
 					allDefinitions.push(foundDefinitions[0]);
 				}
@@ -86,21 +87,75 @@ export class SwitchGenerator implements vscode.CodeActionProvider {
 		}
 
 		const definitions = uniqWith(allDefinitions, (a, b) => a.range.isEqual(b.range));
-		var symbols: vscode.DocumentSymbol[] | undefined = await vscode.commands.executeCommand<vscode.DocumentSymbol[] | undefined>(
-			"vscode.executeDocumentSymbolProvider",
-			document.uri
-		);
 
 		for (const definition of definitions) {
-			const hoverRes = await vscode.commands.executeCommand<Hover[]>("vscode.executeHoverProvider", document.uri, definition.range.start);
+			const hoverRes = await vscode.commands.executeCommand<Hover[]>("vscode.executeHoverProvider", definition.uri, definition.range.start);
 
 			var hoverVal = hoverRes[0].contents[0].value;
 
-			const word = document.getText(definition.range);
-			const lineText = document.getText(document.lineAt(definition.range.start.line).range);
+			const typeDefinitions = await vscode.commands.executeCommand<Location[] | undefined>(
+				"vscode.executeTypeDefinitionProvider",
+				definition.uri,
+				definition.range.start
+			);
 
-			if (hoverVal.includes(word)) {
-				return true;
+			if (typeDefinitions && typeDefinitions?.length > 0) {
+				var definitionDocument: vscode.TextDocument = await vscode.workspace.openTextDocument(definition.uri);
+				var typeDefinitionDocument: vscode.TextDocument = await vscode.workspace.openTextDocument(typeDefinitions[0].uri);
+				const word = definitionDocument.getText(definition.range);
+
+				if (hoverVal.includes(word)) {
+					var symbols: vscode.DocumentSymbol[] | undefined = await vscode.commands.executeCommand<vscode.DocumentSymbol[] | undefined>(
+						"vscode.executeDocumentSymbolProvider",
+						typeDefinitionDocument.uri
+					);
+
+					var wordIndex = hoverVal.indexOf(word);
+					var prefix = "";
+					if (wordIndex !== 0 && hoverVal[wordIndex - 1] !== " ") {
+						while (wordIndex !== 0 && hoverVal[wordIndex] !== " ") {
+							wordIndex--;
+						}
+						prefix = hoverVal.substring(0, wordIndex);
+					} else {
+						var prefix = hoverVal.replaceAll(word, "");
+					}
+					prefix = prefix.substring(6);
+					prefix = prefix.replaceAll("```", "");
+					prefix = prefix.replaceAll("\n", "");
+					prefix = prefix.replaceAll("\r", "");
+					prefix = prefix.trim();
+
+					if (prefix.includes("::")) {
+						prefix = prefix.substring(prefix.lastIndexOf("::") + 2);
+					}
+
+					var symbolChildCheck = (symbol: vscode.DocumentSymbol, childs: vscode.DocumentSymbol[]) => {
+						if (symbol.name === prefix && symbol.kind === vscode.SymbolKind.Enum) {
+							return true;
+						}
+						if (childs.length > 0) {
+							for (var i = 0; i < childs?.length; i++) {
+								if (childs[i].range.intersection(typeDefinitions[0].range) !== undefined) {
+									if (symbolChildCheck(childs[i], childs[i].children)) {
+										return true;
+									}
+								}
+							}
+						}
+						return false;
+					};
+
+					if (symbols !== undefined) {
+						for (var i = 0; i < symbols?.length; i++) {
+							if (symbols[i].range.intersection(typeDefinitions[0].range) !== undefined) {
+								if (symbolChildCheck(symbols[i], symbols[i].children)) {
+									return true;
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 		return false;
@@ -118,7 +173,6 @@ export class SwitchGenerator implements vscode.CodeActionProvider {
 }
 
 async function addCases(document: vscode.TextDocument, range: vscode.Range) {
-	console.log("ADD CASES COMMAND");
 	const start = range.start;
 	const line = document.lineAt(start.line);
 
@@ -148,33 +202,26 @@ async function addCases(document: vscode.TextDocument, range: vscode.Range) {
 	}
 
 	const definitions = uniqWith(allDefinitions, (a, b) => a.range.isEqual(b.range));
-	var symbols: vscode.DocumentSymbol[] | undefined = await vscode.commands.executeCommand<vscode.DocumentSymbol[] | undefined>(
-		"vscode.executeDocumentSymbolProvider",
-		document.uri
-	);
 
 	for (const definition of definitions) {
-		console.log("definition");
-		console.log(definition);
-		const hoverRes = await vscode.commands.executeCommand<Hover[]>("vscode.executeHoverProvider", document.uri, definition.range.start);
-
-		if (!hoverRes) {
-			// continue;
-		}
-
-		console.log(hoverRes);
-		console.log("hoverValue");
-		console.log(hoverRes[0].contents[0].value);
+		const hoverRes = await vscode.commands.executeCommand<Hover[]>("vscode.executeHoverProvider", definition.uri, definition.range.start);
 		var hoverVal = hoverRes[0].contents[0].value;
 
-		const word = document.getText(definition.range);
-		const lineText = document.getText(document.lineAt(definition.range.start.line).range);
+		var definitionDocument: vscode.TextDocument = await vscode.workspace.openTextDocument(definition.uri);
 
-		console.log(word);
-		console.log(lineText);
+		const word = definitionDocument.getText(definition.range);
 
 		if (hoverVal.includes(word)) {
-			var prefix = hoverVal.replaceAll(word, "");
+			var wordIndex = hoverVal.indexOf(word);
+			var prefix = "";
+			if (wordIndex !== 0 && hoverVal[wordIndex - 1] !== " ") {
+				while (wordIndex !== 0 && hoverVal[wordIndex] !== " ") {
+					wordIndex--;
+				}
+				prefix = hoverVal.substring(0, wordIndex);
+			} else {
+				var prefix = hoverVal.replaceAll(word, "");
+			}
 			prefix = prefix.substring(6);
 			prefix = prefix.replaceAll("```", "");
 			prefix = prefix.replaceAll("\n", "");
@@ -182,10 +229,27 @@ async function addCases(document: vscode.TextDocument, range: vscode.Range) {
 			prefix = prefix.trim();
 
 			var edit = new vscode.WorkspaceEdit();
-			var caseTemplate = "\n case " + prefix + "::";
-			console.log("CASE TEMPLATE");
-			console.log(caseTemplate);
-			edit.insert(document.uri, line.range.end, caseTemplate);
+			var lineText = document.getText(new Range(range.start, document.lineAt(start.line).range.end));
+			lineText = lineText.trim();
+			var caseTemplate = "";
+			var addedCurly = false;
+			var hasEndCurly = false;
+			if (!lineText.includes(")")) {
+				caseTemplate += ")";
+			}
+			if (!lineText.includes("{")) {
+				caseTemplate += "{";
+				addedCurly = true;
+			}
+			caseTemplate += "\n case " + prefix + "::";
+			var spot = line.range.end;
+			if (lineText.includes("}")) {
+				hasEndCurly = true;
+				var fullLineText = document.getText(line.range);
+				spot = new Position(line.lineNumber, fullLineText.lastIndexOf("}"));
+				caseTemplate += "\n";
+			}
+			edit.insert(document.uri, spot, caseTemplate);
 			workspace.applyEdit(edit).then(() => {
 				var addedLine = document.lineAt(line.lineNumber + 1);
 
@@ -201,6 +265,22 @@ async function addCases(document: vscode.TextDocument, range: vscode.Range) {
 							}
 
 							var finalEdit = new vscode.WorkspaceEdit();
+							if (addedCurly) {
+								allCases += "\n}";
+							} else if (!hasEndCurly) {
+								for (var i = addedLine.lineNumber + 1; i < document.lineCount; i++) {
+									var loopLineText = document.getText(document.lineAt(i).range);
+									if (loopLineText.includes("}")) {
+										break;
+									} else if (loopLineText.trim().length !== 0) {
+										allCases += "\n}";
+										break;
+									} else if (i + 1 === document.lineCount) {
+										allCases += "\n}";
+										break;
+									}
+								}
+							}
 
 							finalEdit.insert(document.uri, addedLine.range.end, compItems.items[0].label.toString() + ":\nbreak;" + allCases);
 							workspace.applyEdit(finalEdit);
